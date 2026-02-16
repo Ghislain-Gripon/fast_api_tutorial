@@ -12,6 +12,10 @@ resource "google_cloud_run_v2_service" "fastapi" {
     }
 
     containers {
+      env {
+        name = "ENV"
+        value = "PROD"
+      }
       image = "${var.region}-docker.pkg.dev/${var.project}/${var.artifact_registry_id}/fastapi-image:latest"
       ports {
         container_port = 8080

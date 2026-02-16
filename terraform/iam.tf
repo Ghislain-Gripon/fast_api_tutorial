@@ -31,7 +31,7 @@ resource "google_cloud_run_service_iam_member" "public_access" {
 
 # Workload Identity Pool (Connects GitHub to GCP)
 resource "google_iam_workload_identity_pool" "github_pool" {
-  workload_identity_pool_id = "github_pool"
+  workload_identity_pool_id = "github-wif-pool"
 }
 
 resource "google_iam_workload_identity_pool_provider" "github_provider" {
