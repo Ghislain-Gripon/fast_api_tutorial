@@ -45,6 +45,6 @@ hooks = [
     entry = "uv run pytest",
     pass_filenames = false,
     always_run = true,
-    stages = ["pre-push"],
+    stages = ["pre-push", "pre-rebase"],
   },
 ]
