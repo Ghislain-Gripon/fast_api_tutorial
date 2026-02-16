@@ -1,0 +1,10 @@
+.venv
+.ruff_cache
+terraform
+test
+.gitignore
+.prek.toml
+README.md
+.github
+.cursor
+.pytest_cache

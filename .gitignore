@@ -15,3 +15,7 @@ __pycache__/
 *.tfstate
 *.tfstate.backup
 main.config
+*.tfvars
+.cursor
+.terraform.lock.hcl
+terraform/.terraform

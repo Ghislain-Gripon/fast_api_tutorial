@@ -1,37 +1,37 @@
+locals {
+  roles = toset([
+    "roles/run.admin",
+    "roles/run.developer",
+    "roles/run.viewer",
+    "roles/run.invoker",
+    "roles/iam.serviceAccountTokenCreator",
+    "roles/artifactregistry.writer"
+  ])
+}
+
 # Service Account for GitHub Actions
 resource "google_service_account" "github_actions" {
-  account_id   = "${var.project}-terraform"
+  account_id   = "github-actions-sa"
   display_name = "GitHub Actions Service Account"
 }
 
-# Grant permissions to the Service Account
-resource "google_project_iam_member" "artifact_registry_admin" {
-  project = var.project
-  role    = "roles/artifactregistry.writer"
-  member  = "serviceAccount:${google_service_account.github_actions.email}"
+resource "google_project_iam_member" "cloud_run_user" {
+  project  = var.project
+  for_each = local.roles
+  role     = each.value
+  member   = "serviceAccount:${google_service_account.github_actions.email}"
 }
 
-resource "google_project_iam_member" "cloud_run_developer" {
-  project = var.project
-  role    = "roles/run.developer"
-  member  = "serviceAccount:${google_service_account.github_actions.email}"
-}
-
-resource "google_project_iam_member" "terraform_sa" {
-  project = var.project
-  role    = "roles/iam.serviceAccountTokenCreator"
-  member  = "serviceAccount:${google_service_account.github_actions.email}"
-}
-
-resource "google_service_account_iam_member" "sa_user" {
-  service_account_id = google_cloud_run_v2_service.fastapi.service_account # Or the default compute SA
-  role               = "roles/iam.serviceAccountUser"
-  member             = "serviceAccount:${google_service_account.github_actions.email}"
+resource "google_cloud_run_service_iam_member" "public_access" {
+  service  = google_cloud_run_v2_service.fastapi.name
+  location = google_cloud_run_v2_service.fastapi.location
+  role     = "roles/run.invoker"
+  member   = "allUsers" # Valid because the "ingress" setting above blocks direct internet access
 }
 
 # Workload Identity Pool (Connects GitHub to GCP)
 resource "google_iam_workload_identity_pool" "github_pool" {
-  workload_identity_pool_id = "github"
+  workload_identity_pool_id = "github_pool"
 }
 
 resource "google_iam_workload_identity_pool_provider" "github_provider" {
@@ -51,11 +51,12 @@ resource "google_iam_workload_identity_pool_provider" "github_provider" {
 
 # Allow your specific GitHub Repo to impersonate the Service Account
 resource "google_service_account_iam_member" "workload_identity_user" {
-  service_account_id = google_service_account.github_actions.name
+  service_account_id = google_service_account.github_actions.id
   role               = "roles/iam.workloadIdentityUser"
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github_pool.name}/attribute.repository/Ghislain-Gripon/fast_api_tutorial"
 }
 
+# Allow the Load Balancer to invoke Cloud Run
 output "wif_provider_name" {
   value = google_iam_workload_identity_pool_provider.github_provider.name
 }
