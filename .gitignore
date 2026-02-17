@@ -19,3 +19,4 @@ main.config
 .cursor
 .terraform.lock.hcl
 terraform/.terraform
+Makefile
