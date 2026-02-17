@@ -32,6 +32,8 @@ name: 'Build and Deploy to Cloud Run'
 on:
   push:
     branches: [ "master" ]
+    tags:
+      - "v*.*.*"
   pull_request:
     branches: [ "master" ]
 
@@ -57,7 +59,7 @@ jobs:
         with:
           workload_identity_provider: '${{ env.WORKLOAD_IDENTITY_PROVIDER }}'
           project_id: '${{ env.PROJECT_ID }}'
-          service_account: '${{ env.PROJECT_ID }}-terraform@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
+          service_account: 'github-actions-sa@${{ env.PROJECT_ID }}.iam.gserviceaccount.com'
 
       - id: 'secrets'
         uses: 'google-github-actions/get-secretmanager-secrets@v3'
@@ -70,21 +72,40 @@ jobs:
             TERRAFORM_REMOTE_STATE_BUCKET:'${{ env.PROJECT_ID }}'/FASTAPI_TERRAFORM_REMOTE_STATE_BUCKET
             ZONE:'${{ env.PROJECT_ID }}'/FASTAPI_TERRAFORM_ZONE
 
+      - name: 'store bucket name'
+        run: echo 'bucket="$TERRAFORM_REMOTE_STATE_BUCKET"'' >> ./bucket.config
+
       - uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: '1.11.0'
 
       - name: Terraform Init
         run: |-
-          terraform init -backend-config="bucket=${{ env.TERRAFORM_REMOTE_STATE_BUCKET }}"
-          -backend-config="region=${{ env.REGION }}"
-          -backend-config="encrypt=true"
+          terraform init -backend-config="./bucket.config"
         working-directory: ./terraform
 
       - name: Terraform Plan
         if: github.event_name == 'pull_request'
         run: terraform plan
         working-directory: ./terraform
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          # list of Docker images to use as base name for tags
+          images: |
+            ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REGISTRY_ID }}/fastapi-image
+          # generate Docker tags based on the following events/attributes
+          tags: |
+            type=schedule
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
+
       # BEGIN - Docker auth and build
       #
       # If you already have a container image, you can omit these steps.
@@ -95,11 +116,21 @@ jobs:
           password: '${{ steps.auth.outputs.auth_token }}'
           registry: '${{ env.REGION }}-docker.pkg.dev'
 
-      - name: 'Build and Push Container'
-        run: |-
-          DOCKER_TAG="${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REGISTRY_ID }}/fastapi-image:${{ github.sha }}"
-          docker build --tag "${DOCKER_TAG}" .
-          docker push "${DOCKER_TAG}"
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+
+
       - name: 'Deploy to Cloud Run'
 
         # END - Docker auth and build
