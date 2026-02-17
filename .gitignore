@@ -12,3 +12,11 @@ __pycache__/
 *.pyzwzwzw
 .pytest_cache/
 .python-version
+*.tfstate
+*.tfstate.backup
+*.config
+*.tfvars
+.cursor
+.terraform.lock.hcl
+terraform/.terraform
+Makefile
