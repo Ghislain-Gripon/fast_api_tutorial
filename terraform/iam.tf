@@ -9,6 +9,9 @@ locals {
   ])
 }
 
+data "google_compute_default_service_account" "default" {
+}
+
 # Service Account for GitHub Actions
 resource "google_service_account" "github_actions" {
   account_id   = "github-actions-sa"
@@ -26,7 +29,7 @@ resource "google_cloud_run_service_iam_member" "public_access" {
   service  = google_cloud_run_v2_service.fastapi.name
   location = google_cloud_run_v2_service.fastapi.location
   role     = "roles/run.invoker"
-  member   = "allUsers" # Valid because the "ingress" setting above blocks direct internet access
+  member   = "serviceAccount:${data.google_compute_default_service_account.default.email}" # Valid because the "ingress" setting above blocks direct internet access
 }
 
 # Workload Identity Pool (Connects GitHub to GCP)
